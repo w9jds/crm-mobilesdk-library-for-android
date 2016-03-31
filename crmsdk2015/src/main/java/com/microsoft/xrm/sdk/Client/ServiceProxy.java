@@ -1,6 +1,15 @@
 package com.microsoft.xrm.sdk.Client;
 
-import retrofit.RequestInterceptor;
+
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
+import android.support.v4.util.ArrayMap;
+
+import java.io.IOException;
+
+import okhttp3.Interceptor;
+import okhttp3.Request;
+import okhttp3.Response;
 
 /**
  * Created on 3/6/2015.
@@ -8,19 +17,27 @@ import retrofit.RequestInterceptor;
 public abstract class ServiceProxy {
 
     private String endpoint;
-    private RequestInterceptor authHeader;
+    private Interceptor authHeader;
 
-    protected ServiceProxy(String endpoint, RequestInterceptor requestInterceptor) {
+    protected ServiceProxy(@NonNull String endpoint, @NonNull final String sessionToken,
+                           @Nullable final ArrayMap<String, String> headers) {
         this.endpoint = endpoint;
-        this.authHeader = requestInterceptor;
-    }
-
-    protected ServiceProxy(String endpoint, final String sessionToken) {
-        this.endpoint = endpoint;
-        this.authHeader = new RequestInterceptor() {
+        this.authHeader = new Interceptor() {
             @Override
-            public void intercept(RequestFacade request) {
-                request.addHeader("Authorization", "Bearer " + sessionToken.replaceAll("(\\r|\\n)", ""));
+            public Response intercept(Chain chain) throws IOException {
+                Request request = chain.request();
+
+                Request.Builder builder = request.newBuilder()
+                        .addHeader("Authorization", "Bearer " + sessionToken.replaceAll("(\\r|\\n)", ""));
+
+                if (headers != null) {
+                    int count = headers.size();
+                    for (int i = 0; i < count; i++) {
+                        builder.addHeader(headers.keyAt(i), headers.valueAt(i));
+                    }
+                }
+
+                return chain.proceed(builder.build());
             }
         };
     }
@@ -29,7 +46,7 @@ public abstract class ServiceProxy {
         return this.endpoint;
     }
 
-    public RequestInterceptor getAuthHeader() {
+    public Interceptor getAuthHeader() {
         return this.authHeader;
     }
 }

@@ -2,12 +2,15 @@ package com.microsoft.xrm.sdk.Client;
 
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.support.v4.util.ArrayMap;
+import android.support.v4.util.SimpleArrayMap;
 import android.util.Xml;
 
 import com.microsoft.xrm.sdk.Callback;
 import com.microsoft.xrm.sdk.Entity;
 import com.microsoft.xrm.sdk.EntityCollection;
 import com.microsoft.xrm.sdk.EntityReferenceCollection;
+import com.microsoft.xrm.sdk.Messages.RetrieveMultipleResponse;
 import com.microsoft.xrm.sdk.OrganizationRequest;
 import com.microsoft.xrm.sdk.OrganizationResponse;
 import com.microsoft.xrm.sdk.ColumnSet;
@@ -21,15 +24,15 @@ import org.xmlpull.v1.XmlPullParser;
 import java.io.ByteArrayInputStream;
 import java.util.UUID;
 
-import retrofit.RequestInterceptor;
-import retrofit.RestAdapter;
-import retrofit.RetrofitError;
-import retrofit.client.Response;
-import retrofit.http.Body;
-import retrofit.http.Header;
-import retrofit.http.Headers;
-import retrofit.http.POST;
-import retrofit.mime.TypedString;
+import okhttp3.OkHttpClient;
+import retrofit2.Call;
+import retrofit2.Converter;
+import retrofit2.Response;
+import retrofit2.Retrofit;
+import retrofit2.http.Body;
+import retrofit2.http.Header;
+import retrofit2.http.Headers;
+import retrofit2.http.POST;
 
 /**
  * Created on 3/5/2015.
@@ -37,14 +40,40 @@ import retrofit.mime.TypedString;
 public class OrganizationServiceProxy extends ServiceProxy implements OrganizationService {
 
     private UUID CallerId;
-    private Endpoint SoapEndpoint;
+    private XrmService xrmService;
 
-    interface Endpoint {
-
-        @Headers({"Content-Type: text/xml; charset=utf-8"})
+    interface XrmService {
+        @Headers({"SOAPAction: http://schemas.microsoft.com/xrm/2011/Contracts/Services/IOrganizationService/RetrieveMultiple"})
         @POST("/XRMServices/2011/Organization.svc/web/")
-        void Soap(@Header("SOAPAction") String soapAction, @Body TypedString body, retrofit.Callback<?> callback);
+        Call<RetrieveMultipleResponse> retrieveMultiple(@Body String body);
 
+        @Headers({"SOAPAction: http://schemas.microsoft.com/xrm/2011/Contracts/Services/IOrganizationService/Execute"})
+        @POST("/XRMServices/2011/Organization.svc/web/")
+        Call<OrganizationResponse> execute(@Body String body);
+
+        @Headers({"SOAPAction: http://schemas.microsoft.com/xrm/2011/Contracts/Services/IOrganizationService/Retrieve"})
+        @POST("/XRMServices/2011/Organization.svc/web/")
+        Call<Entity> retrieve(@Body String body);
+
+        @Headers({"SOAPAction: http://schemas.microsoft.com/xrm/2011/Contracts/Services/IOrganizationService/Create"})
+        @POST("/XRMServices/2011/Organization.svc/web/")
+        Call<Response> create(@Body String body);
+
+        @Headers({"SOAPAction: http://schemas.microsoft.com/xrm/2011/Contracts/Services/IOrganizationService/Delete"})
+        @POST("/XRMServices/2011/Organization.svc/web/")
+        Call<Response> delete(@Body String body);
+
+        @Headers({"SOAPAction: http://schemas.microsoft.com/xrm/2011/Contracts/Services/IOrganizationService/Update"})
+        @POST("/XRMServices/2011/Organization.svc/web/")
+        Call<Response> update(@Body String body);
+
+        @Headers({"SOAPAction: http://schemas.microsoft.com/xrm/2011/Contracts/Services/IOrganizationService/Associate"})
+        @POST("/XRMServices/2011/Organization.svc/web/")
+        Call<Response> associate(@Body String body);
+
+        @Headers({"SOAPAction: http://schemas.microsoft.com/xrm/2011/Contracts/Services/IOrganizationService/Disassociate"})
+        @POST("/XRMServices/2011/Organization.svc/web/")
+        Call<Response> disassociate(@Body String body);
     }
 
     /**
@@ -52,34 +81,43 @@ public class OrganizationServiceProxy extends ServiceProxy implements Organizati
      * @param uri endpoint for all network calls
      * @param sessionToken oAuth Token
      */
-    public OrganizationServiceProxy(String uri, String sessionToken) {
-        super(uri, sessionToken);
-        this.SoapEndpoint = buildSoapEndpoint();
+    public OrganizationServiceProxy(@NonNull String uri, @NonNull String sessionToken) {
+//        ArrayMap<String, String> extraHeaders = new ArrayMap<>();
+//        extraHeaders.put("Content-Type", "text/xml; charset=utf-8");
+
+        super(uri, sessionToken, null);
+        this.xrmService = buildSoapEndpoint();
     }
 
-    /**
-     *
-     * @param uri endpoint for all network calls
-     * @param authHeader the authentication header containing the oAuth token
-     */
-    public OrganizationServiceProxy(String uri, RequestInterceptor authHeader) {
-        super(uri, authHeader);
-        this.SoapEndpoint = buildSoapEndpoint();
+//    /**
+//     *
+//     * @param uri endpoint for all network calls
+//     * @param authHeader the authentication header containing the oAuth token
+//     */
+//    public OrganizationServiceProxy(String uri, RequestInterceptor authHeader) {
+//        super(uri, authHeader);
+//        this.SoapEndpoint = buildSoapEndpoint();
+//    }
+
+//    public OrganizationServiceProxy(RestOrganizationServiceProxy oDataService) {
+//        super(oDataService.getEndpoint(), oDataService.getAuthHeader());
+//        this.SoapEndpoint = buildSoapEndpoint();
+//    }
+
+    private OkHttpClient buildClient() {
+        return new OkHttpClient.Builder()
+                .addInterceptor(getAuthHeader())
+                .build();
     }
 
-    public OrganizationServiceProxy(RestOrganizationServiceProxy oDataService) {
-        super(oDataService.getEndpoint(), oDataService.getAuthHeader());
-        this.SoapEndpoint = buildSoapEndpoint();
-    }
-
-    private Endpoint buildSoapEndpoint() {
-        RestAdapter restAdapter = new RestAdapter.Builder()
-                .setEndpoint(getEndpoint())
-                .setConverter(new StringConverter())
-                .setRequestInterceptor(getAuthHeader())
+    private XrmService buildSoapEndpoint() {
+        Retrofit retrofit = new Retrofit.Builder()
+                .client(buildClient())
+                .baseUrl(getEndpoint())
+                .addConverterFactory()
                 .build();
 
-        return restAdapter.create(Endpoint.class);
+        return  retrofit.create(XrmService.class);
     }
 
     @Override
@@ -92,6 +130,19 @@ public class OrganizationServiceProxy extends ServiceProxy implements Organizati
         content.append("</d:Create>");
         content.append("</s:Body>");
         content.append("</s:Envelope>");
+
+        Call<Response> call = xrmService.create(content.toString());
+        call.enqueue(new retrofit2.Callback<Response>() {
+            @Override
+            public void onResponse(Call<Response> call, Response<Response> response) {
+
+            }
+
+            @Override
+            public void onFailure(Call<Response> call, Throwable t) {
+
+            }
+        });
 
         SoapEndpoint.Soap(SoapActions.CREATE, new TypedString(content.toString()), new retrofit.Callback<String>() {
             @Override
@@ -106,7 +157,7 @@ public class OrganizationServiceProxy extends ServiceProxy implements Organizati
                     do {
                         parser.next();
                     } while(!parser.getName().equals("CreateResult"));
-                    parser.require(XmlPullParser.START_TAG, "http://schemas.microsoft.com/xrm/2011/Contracts/Services", "CreateResult");
+                    parser.require(XmlPullParser.START_TAG, V5.Services, "CreateResult");
                     parser.next();
                     if (parser.getEventType() == XmlPullParser.TEXT) {
                         newId = UUID.fromString(parser.getText());
